@@ -3,162 +3,209 @@ import { Hono } from 'hono';
 type Bindings = {
 	CLOUDFLARE_ACCOUNT_ID: string;
 	CLOUDFLARE_API_TOKEN: string;
-	KV: KVNamespace; // Bind the KV namespace
+	KV: KVNamespace;
 };
 
-// Define our KV record structure
 interface ScanRecord {
 	url: string;
 	uuid: string;
-	status: 'pending' | 'completed';
+	status: 'pending' | 'completed' | 'failed';
 	timestamp: number;
+	visibility?: string;
 	result?: any;
 }
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Helper to safely encode URLs for KV keys
-const getKvKey = (url: string) => `scan_data:${btoa(url)}`;
+const cfBase = (id: string) =>
+	`https://api.cloudflare.com/client/v4/accounts/${id}/urlscanner/v2`;
 
-/**
- * 1. SUBMIT ENDPOINT
- * Initiates a new scan or returns an existing cached/pending scan.
- */
+const authH = (token: string): Record<string, string> => ({
+	Authorization: `Bearer ${token}`,
+	'Content-Type': 'application/json',
+});
+
+const kvKey = (url: string) => `scan:${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
+
+// POST /api/scan/submit
 app.post('/api/scan/submit', async (c) => {
 	try {
-		const { url } = await c.req.json();
+		const { url, visibility = 'Public', screenshotsResolutions, customagent, referer, skipCache = false } =
+			await c.req.json() as any;
+
 		if (!url) return c.json({ error: 'URL is required' }, 400);
 
-		// Normalize URL
 		let targetUrl: string;
-		try {
-			targetUrl = new URL(url).href;
-		} catch {
-			return c.json({ error: 'Invalid URL format' }, 400);
+		try { targetUrl = new URL(url).href; }
+		catch { return c.json({ error: 'Invalid URL format' }, 400); }
+
+		const key = kvKey(targetUrl);
+
+		if (!skipCache) {
+			const cached = await c.env.KV.get<ScanRecord>(key, 'json');
+			if (cached) {
+				return c.json({
+					message: cached.status === 'completed' ? 'Retrieved from cache' : 'Scan already in progress',
+					data: cached, cached: true,
+				});
+			}
 		}
 
-		const kvKey = getKvKey(targetUrl);
+		const payload: Record<string, unknown> = { url: targetUrl, visibility };
+		if (screenshotsResolutions?.length) payload.screenshotsResolutions = screenshotsResolutions;
+		if (customagent) payload.customagent = customagent;
+		if (referer) payload.referer = referer;
 
-		// 1a. Check KV for existing recent scan (Cache hit)
-		const existingRecord = await c.env.KV.get<ScanRecord>(kvKey, 'json');
-		if (existingRecord) {
-			// If it's already there (either pending or completed), return it immediately
-			return c.json({ 
-				message: existingRecord.status === 'completed' ? 'Retrieved from cache' : 'Scan already in progress',
-				data: existingRecord 
-			});
-		}
-
-		// 1b. Initiate new scan via Cloudflare API
-		const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${c.env.CLOUDFLARE_ACCOUNT_ID}/urlscanner/v2/scan`, {
+		const res = await fetch(`${cfBase(c.env.CLOUDFLARE_ACCOUNT_ID)}/scan`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${c.env.CLOUDFLARE_API_TOKEN}`
-			},
-			body: JSON.stringify({ url: targetUrl, visibility: 'Public' })
+			headers: authH(c.env.CLOUDFLARE_API_TOKEN),
+			body: JSON.stringify(payload),
 		});
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			return c.json({ error: 'Failed to initiate scan', details: errorText }, response.status);
+		if (!res.ok) {
+			const err = await res.text();
+			return c.json({ error: 'Submission failed', details: err }, 502);
 		}
 
-		const data = await response.json() as any;
-		
-		// 1c. Create new record and store in KV (Expires in 24 hours to keep data fresh)
-		const scanRecord: ScanRecord = {
-			url: targetUrl,
-			uuid: data.result.uuid,
-			status: 'pending',
-			timestamp: Date.now()
-		};
+		const cfData = await res.json() as any;
+		const uuid = cfData.result?.uuid ?? cfData.uuid ?? '';
 
-		await c.env.KV.put(kvKey, JSON.stringify(scanRecord), { expirationTtl: 86400 });
-
-		return c.json({ message: 'Scan initiated successfully', data: scanRecord });
-	} catch (error) {
+		const record: ScanRecord = { url: targetUrl, uuid, status: 'pending', timestamp: Date.now(), visibility };
+		await c.env.KV.put(key, JSON.stringify(record), { expirationTtl: 86400 });
+		return c.json({ message: 'Scan initiated', data: record, cached: false });
+	} catch (err) {
+		console.error('Submit:', err);
 		return c.json({ error: 'Internal Server Error' }, 500);
 	}
 });
 
-/**
- * 2. CHECK ENDPOINT
- * Retrieves the scan result from KV. If pending, checks upstream API and updates KV if completed.
- */
+// GET /api/scan/check?url=...
 app.get('/api/scan/check', async (c) => {
 	try {
 		const rawUrl = c.req.query('url');
-		if (!rawUrl) return c.json({ error: 'URL query parameter is required' }, 400);
+		if (!rawUrl) return c.json({ error: 'url param required' }, 400);
 
 		let targetUrl: string;
-		try { targetUrl = new URL(rawUrl).href; } catch { return c.json({ error: 'Invalid URL format' }, 400); }
+		try { targetUrl = new URL(rawUrl).href; }
+		catch { return c.json({ error: 'Invalid URL format' }, 400); }
 
-		const kvKey = getKvKey(targetUrl);
-		const record = await c.env.KV.get<ScanRecord>(kvKey, 'json');
+		const key = kvKey(targetUrl);
+		const record = await c.env.KV.get<ScanRecord>(key, 'json');
+		if (!record) return c.json({ error: 'No scan found. Submit first.' }, 404);
+		if (record.status === 'completed') return c.json({ message: 'Scan completed', data: record });
 
-		// 2a. Handle not found
-		if (!record) {
-			return c.json({ error: 'No scan record found for this URL. Please submit it first.' }, 404);
-		}
-
-		// 2b. If already completed in KV, return immediately (Zero-latency cache hit)
-		if (record.status === 'completed') {
-			return c.json({ message: 'Scan completed', data: record });
-		}
-
-		// 2c. If still pending, check Cloudflare upstream
-		const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${c.env.CLOUDFLARE_ACCOUNT_ID}/urlscanner/v2/result/${record.uuid}`, {
-			headers: { 'Authorization': `Bearer ${c.env.CLOUDFLARE_API_TOKEN}` }
+		const upstream = await fetch(`${cfBase(c.env.CLOUDFLARE_ACCOUNT_ID)}/result/${record.uuid}`, {
+			headers: authH(c.env.CLOUDFLARE_API_TOKEN),
 		});
 
-		if (!response.ok) {
-			return c.json({ error: 'Upstream provider error fetching result' }, 502);
-		}
+		// CF API returns 404 while scanning, 200 when done (per docs)
+		if (upstream.status === 404) return c.json({ message: 'Scan is still processing…', data: record }, 202);
+		if (!upstream.ok) return c.json({ error: 'Upstream error', status: upstream.status }, 502);
 
-		const resultData = await response.json() as any;
-
-		// 2d. Determine if Cloudflare has finished processing
-		// (Cloudflare URL scanner returns a specific payload when done, usually containing 'page' details)
-		if (resultData.success && resultData.result && resultData.result.page) {
-			record.status = 'completed';
-			record.result = resultData.result; // Store the heavy payload
-			
-			// Persist the completed report to KV
-			await c.env.KV.put(kvKey, JSON.stringify(record), { expirationTtl: 86400 });
-			
-			return c.json({ message: 'Scan completed', data: record });
-		} else {
-			// Still processing upstream
-			return c.json({ message: 'Scan is still processing. Try again shortly.', data: record }, 202);
-		}
-	} catch (error) {
+		const cfResult = await upstream.json() as any;
+		record.status = 'completed';
+		record.result = cfResult.result ?? cfResult;
+		await c.env.KV.put(key, JSON.stringify(record), { expirationTtl: 86400 });
+		return c.json({ message: 'Scan completed', data: record });
+	} catch (err) {
+		console.error('Check:', err);
 		return c.json({ error: 'Internal Server Error' }, 500);
 	}
 });
 
+// GET /api/scan/uuid/:uuid — fetch result directly (for search results)
+app.get('/api/scan/uuid/:uuid', async (c) => {
+	try {
+		const { uuid } = c.req.param();
+		const upstream = await fetch(`${cfBase(c.env.CLOUDFLARE_ACCOUNT_ID)}/result/${uuid}`, {
+			headers: authH(c.env.CLOUDFLARE_API_TOKEN),
+		});
 
-// Endpoint for Live Screenshots (Unchanged)
+		if (upstream.status === 404) return c.json({ message: 'Still processing or not found' }, 202);
+		if (!upstream.ok) return c.json({ error: 'Upstream error' }, 502);
+
+		const cfResult = await upstream.json() as any;
+		const result = cfResult.result ?? cfResult;
+		return c.json({
+			message: 'Scan loaded',
+			data: { uuid, status: 'completed', url: result?.task?.url ?? result?.page?.url ?? '', timestamp: Date.now(), result },
+		});
+	} catch (err) {
+		console.error('UUID fetch:', err);
+		return c.json({ error: 'Internal Server Error' }, 500);
+	}
+});
+
+// GET /api/scan/search?q=...&limit=10&page=1
+app.get('/api/scan/search', async (c) => {
+	try {
+		const q = c.req.query('q') ?? '';
+		const limit = c.req.query('limit') ?? '10';
+		const page = c.req.query('page') ?? '1';
+
+		const params = new URLSearchParams();
+		if (q) params.set('q', q);
+		params.set('limit', limit);
+		params.set('page', page);
+
+		const res = await fetch(`${cfBase(c.env.CLOUDFLARE_ACCOUNT_ID)}/search?${params}`, {
+			headers: authH(c.env.CLOUDFLARE_API_TOKEN),
+		});
+
+		if (!res.ok) {
+			const err = await res.text();
+			return c.json({ error: 'Search failed', details: err }, 502);
+		}
+
+		return c.json(await res.json());
+	} catch (err) {
+		console.error('Search:', err);
+		return c.json({ error: 'Internal Server Error' }, 500);
+	}
+});
+
+// GET /api/scan/screenshot/:uuid?resolution=desktop
+app.get('/api/scan/screenshot/:uuid', async (c) => {
+	try {
+		const { uuid } = c.req.param();
+		const resolution = c.req.query('resolution') ?? 'desktop';
+
+		const res = await fetch(
+			`${cfBase(c.env.CLOUDFLARE_ACCOUNT_ID)}/screenshots/${uuid}?resolution=${resolution}`,
+			{ headers: { Authorization: `Bearer ${c.env.CLOUDFLARE_API_TOKEN}` } }
+		);
+
+		if (!res.ok) return c.json({ error: 'Screenshot not available' }, 404);
+		const buf = await res.arrayBuffer();
+		return new Response(buf, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' } });
+	} catch (err) {
+		console.error('Screenshot:', err);
+		return c.json({ error: 'Internal Server Error' }, 500);
+	}
+});
+
+// POST /api/screenshot — Browser Rendering fallback
 app.post('/api/screenshot', async (c) => {
-	const { url } = await c.req.json();
-	if (!url) return c.json({ error: 'URL is required' }, 400);
+	try {
+		const { url } = await c.req.json() as { url?: string };
+		if (!url) return c.json({ error: 'URL is required' }, 400);
 
-	const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${c.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/screenshot`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${c.env.CLOUDFLARE_API_TOKEN}`
-		},
-		body: JSON.stringify({ 
-			url: url,
-			screenshotOptions: { fullPage: false },
-			viewport: { width: 1280, height: 720 }
-		})
-	});
+		const res = await fetch(
+			`https://api.cloudflare.com/client/v4/accounts/${c.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/screenshot`,
+			{
+				method: 'POST',
+				headers: authH(c.env.CLOUDFLARE_API_TOKEN),
+				body: JSON.stringify({ url, screenshotOptions: { fullPage: false }, viewport: { width: 1280, height: 720 } }),
+			}
+		);
 
-	if (!response.ok) return c.json({ error: 'Failed to capture screenshot' }, response.status);
-	const imageBuffer = await response.arrayBuffer();
-	return new Response(imageBuffer, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' }});
+		if (!res.ok) return c.json({ error: 'Capture failed' }, res.status as any);
+		const buf = await res.arrayBuffer();
+		return new Response(buf, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' } });
+	} catch (err) {
+		console.error('Browser rendering:', err);
+		return c.json({ error: 'Internal Server Error' }, 500);
+	}
 });
 
 export default app;
