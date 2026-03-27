@@ -3,203 +3,414 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Scanner Professional</title>
+    <title>Cloudflare URL Scanner Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        /* Custom scrollbar for inner panes */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
-    <div class="max-w-6xl mx-auto p-6">
-        <header class="mb-8 text-center pt-8">
-            <h1 class="text-4xl font-extrabold text-blue-600 mb-2">URL Scanner Pro</h1>
-            <p class="text-slate-600">Advanced threat analysis with Live Screenshots and PDF Export.</p>
-        </header>
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans antialiased selection:bg-blue-200">
 
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-8 flex gap-4 max-w-3xl mx-auto">
-            <input type="url" id="urlInput" placeholder="https://example.com" class="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required>
-            <button id="scanBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-md">
-                Analyze
-            </button>
+    <!-- Top Navigation -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="p-2 bg-blue-600 rounded-lg shadow-sm">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+                </div>
+                <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">URL Scanner Pro</span>
+            </div>
+            <div class="text-sm font-medium text-slate-500 hidden sm:block">Advanced Threat & Performance Analysis</div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+        
+        <!-- Search Section -->
+        <div class="max-w-3xl mx-auto mb-12 text-center">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Analyze any URL instantly</h1>
+            <p class="text-slate-500 mb-8 text-lg">Deep scan websites for security threats, network properties, and live previews without visiting them.</p>
+            
+            <form id="scanForm" class="relative group">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i data-lucide="globe" class="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors"></i>
+                </div>
+                <input type="url" id="urlInput" class="block w-full pl-12 pr-36 py-4 text-lg border-2 border-slate-200 rounded-2xl bg-white shadow-sm focus:ring-0 focus:border-blue-500 transition-all outline-none" placeholder="https://example.com" required>
+                <button type="submit" class="absolute inset-y-2 right-2 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-semibold transition-all shadow-md active:scale-95">
+                    <i data-lucide="scan-line" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Scan Now</span>
+                </button>
+            </form>
+            <div id="apiAlert" class="mt-4 hidden text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 text-left flex gap-3 items-start">
+                <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0"></i>
+                <span>API keys not detected or failed. Displaying <strong>mock data</strong> so you can evaluate the UI design. Add keys to <code>wrangler.jsonc</code> for live scans.</span>
+            </div>
         </div>
 
-        <div id="loading" class="hidden text-center py-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p class="text-slate-500 font-medium text-lg">Performing security analysis...</p>
+        <!-- Loading State -->
+        <div id="loadingState" class="hidden flex-col items-center justify-center py-20 animate-in fade-in duration-300">
+            <div class="relative">
+                <div class="w-16 h-16 border-4 border-blue-100 rounded-full"></div>
+                <div class="w-16 h-16 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+                <i data-lucide="search" class="w-6 h-6 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
+            </div>
+            <h3 class="mt-6 text-xl font-semibold text-slate-800">Analyzing Target...</h3>
+            <p class="text-slate-500 mt-2 text-center max-w-sm">Performing deep network inspection, security classification, and rendering environment.</p>
         </div>
 
-        <div id="reportContainer" class="hidden space-y-6">
-            <div class="flex flex-wrap justify-end gap-3 mb-2">
-                <button id="liveScreenshotBtn" class="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-medium text-sm transition border border-indigo-200">📷 Capture Live Screenshot</button>
-                <button id="downloadPdfBtn" class="px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-md font-medium text-sm transition border border-red-200">📄 Save as PDF</button>
-                <button id="downloadJsonBtn" class="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md font-medium text-sm transition border border-slate-300">{ } Download JSON</button>
+        <!-- Dashboard / Results State -->
+        <div id="dashboard" class="hidden animate-in slide-in-from-bottom-4 duration-500">
+            
+            <!-- Export Toolbar (Will be excluded from PDF) -->
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 pdf-exclude">
+                <div class="text-sm font-medium text-slate-500 flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4"></i> Scanned just now
+                </div>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button id="downloadPdfBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm">
+                        <i data-lucide="file-down" class="w-4 h-4"></i> Save PDF
+                    </button>
+                    <button id="downloadJsonBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm">
+                        <i data-lucide="code" class="w-4 h-4"></i> Export JSON
+                    </button>
+                </div>
             </div>
 
-            <div id="exportableArea" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="flex flex-col md:flex-row border-b border-slate-100">
-                    <div class="md:w-1/2 bg-slate-100 p-6 flex items-center justify-center border-r border-slate-100">
-                        <div id="screenshotArea" class="aspect-video w-full bg-white rounded border border-slate-300 shadow-inner flex items-center justify-center text-slate-400 overflow-hidden">
-                            <span>Image rendering...</span>
-                        </div>
-                    </div>
-                    <div class="md:w-1/2 p-6 space-y-5">
-                        <h2 class="text-2xl font-bold text-slate-800 break-all" id="reportUrl">...</h2>
+            <!-- Printable Report Area -->
+            <div id="reportContent" class="space-y-6">
+                
+                <!-- Main Header Card -->
+                <div class="glass-panel border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="p-6 sm:p-8 flex flex-col lg:flex-row gap-8">
                         
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Verdict</span>
-                                <span id="reportStatus" class="font-bold text-lg">--</span>
+                        <!-- Left: Visuals -->
+                        <div class="w-full lg:w-5/12 flex flex-col gap-3">
+                            <div class="aspect-video bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-200 flex items-center justify-center group">
+                                <img id="screenshotImg" src="" class="w-full h-full object-cover hidden" alt="Website Screenshot">
+                                <div id="screenshotPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                                    <i data-lucide="image" class="w-10 h-10 mb-2 opacity-50"></i>
+                                    <span class="text-sm font-medium">Screenshot Pending</span>
+                                </div>
                             </div>
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Primary IP</span>
-                                <span id="reportIp" class="font-medium font-mono text-sm">--</span>
+                            <button id="liveScreenshotBtn" class="pdf-exclude w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-semibold transition-colors">
+                                <i data-lucide="camera" class="w-4 h-4"></i> Generate Live Screenshot
+                            </button>
+                        </div>
+
+                        <!-- Right: Core Data -->
+                        <div class="w-full lg:w-7/12 flex flex-col justify-center">
+                            <div class="flex items-start justify-between gap-4 mb-4">
+                                <h2 id="targetUrl" class="text-2xl sm:text-3xl font-bold text-slate-900 break-all leading-tight">--</h2>
+                                <div id="verdictBadge" class="flex-shrink-0 px-3 py-1 rounded-full text-sm font-bold border flex items-center gap-1">
+                                    <i id="verdictIcon" class="w-4 h-4"></i>
+                                    <span id="verdictText">Pending</span>
+                                </div>
                             </div>
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Network (ASN)</span>
-                                <span id="reportAsn" class="font-medium font-mono text-sm">--</span>
-                            </div>
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Server Tech</span>
-                                <span id="reportServer" class="font-medium font-mono text-sm">--</span>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><i data-lucide="server" class="w-3 h-3"></i> IP Address</div>
+                                    <div id="primaryIp" class="font-mono text-sm font-medium text-slate-800 break-all">--</div>
+                                </div>
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><i data-lucide="network" class="w-3 h-3"></i> ASN</div>
+                                    <div id="primaryAsn" class="font-mono text-sm font-medium text-slate-800 break-all">--</div>
+                                </div>
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> Location</div>
+                                    <div id="primaryLoc" class="text-sm font-medium text-slate-800">--</div>
+                                </div>
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><i data-lucide="hard-drive" class="w-3 h-3"></i> Server</div>
+                                    <div id="primaryServer" class="text-sm font-medium text-slate-800 truncate">--</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="p-6 bg-slate-50 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                        <h3 class="text-lg font-semibold mb-4 text-slate-800 border-b pb-2">🌐 Detailed IP Data</h3>
-                        <ul id="networkList" class="space-y-3 text-sm">
-                            <li class="flex justify-between items-center">
-                                <span class="text-slate-500 font-medium">IP Address</span>
-                                <span class="font-mono bg-slate-100 px-2 py-1 rounded" id="netIp">--</span>
+                <!-- Detailed Information Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Network Details -->
+                    <div class="glass-panel border border-slate-200 rounded-2xl p-6 shadow-sm">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <i data-lucide="globe-2" class="w-5 h-5 text-blue-500"></i> Network & Protocol
+                        </h3>
+                        <ul class="space-y-3">
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                <span class="text-slate-500 font-medium text-sm">TLS Version</span>
+                                <span id="dtTls" class="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-700">--</span>
                             </li>
-                            <li class="flex justify-between items-center">
-                                <span class="text-slate-500 font-medium">TLS Protocol</span>
-                                <span class="font-mono bg-slate-100 px-2 py-1 rounded" id="netTls">--</span>
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                <span class="text-slate-500 font-medium text-sm">Certificate Issuer</span>
+                                <span id="dtIssuer" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span>
+                            </li>
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                <span class="text-slate-500 font-medium text-sm">Domain Registrar</span>
+                                <span id="dtRegistrar" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span>
                             </li>
                         </ul>
                     </div>
 
-                    <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                        <h3 class="text-lg font-semibold mb-4 text-slate-800 border-b pb-2">📁 File Downloads</h3>
-                        <div id="fileList" class="space-y-3 text-sm max-h-48 overflow-y-auto">
-                            </div>
+                    <!-- File Hashes / Assets -->
+                    <div class="glass-panel border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <i data-lucide="file-code-2" class="w-5 h-5 text-purple-500"></i> Asset Hashes (SHA-256)
+                        </h3>
+                        <div id="hashList" class="space-y-3 overflow-y-auto max-h-[160px] pr-2">
+                            <!-- Injected via JS -->
+                            <div class="text-center text-slate-400 py-4 text-sm font-medium">No assets recorded.</div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Global State
         let rawScanData = null;
+        let activeTargetUrl = '';
 
-        document.getElementById('scanBtn').addEventListener('click', async () => {
-            const url = document.getElementById('urlInput').value;
-            if (!url) return alert('Please enter a valid URL.');
-
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('reportContainer').classList.add('hidden');
+        // DOM Elements
+        const scanForm = document.getElementById('scanForm');
+        const urlInput = document.getElementById('urlInput');
+        const loadingState = document.getElementById('loadingState');
+        const dashboard = document.getElementById('dashboard');
+        const apiAlert = document.getElementById('apiAlert');
+        
+        // Form Submission
+        scanForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = urlInput.value.trim();
+            if (!url) return;
+            
+            activeTargetUrl = url;
+            showLoading();
+            apiAlert.classList.add('hidden');
 
             try {
-                // Submit the request to our Hono backend
+                // 1. Initiate Scan
                 const initRes = await fetch('/api/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
                 });
-                
-                if (!initRes.ok) throw new Error('API Error');
+
+                if (!initRes.ok) throw new Error('API Keys missing or scan failed');
+
                 const initData = await initRes.json();
-                const scanId = initData.result.uuid;
+                const scanUuid = initData.result.uuid;
 
-                // Poll for completion (Mocked delay here for demonstration)
+                // 2. Poll for results (Wait 3 seconds minimum, then check)
                 setTimeout(async () => {
-                    const reportRes = await fetch(`/api/scan/${scanId}`);
-                    const reportData = await reportRes.json();
-                    
-                    rawScanData = reportData;
-                    populateDashboard(reportData, url);
-
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('reportContainer').classList.remove('hidden');
+                    try {
+                        const reportRes = await fetch(`/api/scan/${scanUuid}`);
+                        if(!reportRes.ok) throw new Error('Polling failed');
+                        
+                        const reportData = await reportRes.json();
+                        rawScanData = reportData;
+                        populateDashboard(reportData, url);
+                        showDashboard();
+                    } catch (err) {
+                        handleMockFallback(url);
+                    }
                 }, 3000);
 
             } catch (err) {
-                alert('Scan successfully queued. Note: Cloudflare API keys must be added to your environment variables to fetch final data.');
-                document.getElementById('loading').classList.add('hidden');
+                console.warn(err);
+                // Fallback to beautiful mock data so the UI doesn't look broken if API isn't setup
+                handleMockFallback(url);
             }
         });
 
-        function populateDashboard(data, targetUrl) {
-            document.getElementById('reportUrl').textContent = targetUrl;
+        function handleMockFallback(url) {
+            apiAlert.classList.remove('hidden');
             
-            const isMalicious = data.result?.verdicts?.malicious;
-            const statusEl = document.getElementById('reportStatus');
-            statusEl.textContent = isMalicious ? 'Malicious Detected' : 'Clean';
-            statusEl.className = isMalicious ? 'font-bold text-lg text-red-600' : 'font-bold text-lg text-emerald-600';
-            
-            const pageData = data.result?.page || {};
-            document.getElementById('reportIp').textContent = pageData.ip || 'Unavailable';
-            document.getElementById('reportAsn').textContent = pageData.asn || 'Unavailable';
-            document.getElementById('reportServer').textContent = pageData.server || 'Unavailable';
-            
-            document.getElementById('netIp').textContent = pageData.ip || 'Unavailable';
-            document.getElementById('netTls').textContent = pageData.tls_version || 'Unavailable';
+            const isMalicious = url.includes('bad') || url.includes('malware');
+            rawScanData = {
+                result: {
+                    page: {
+                        url: url,
+                        ip: '104.21.55.120',
+                        asn: 'AS13335',
+                        asnLocationAlpha2: 'US',
+                        server: 'cloudflare',
+                        tlsVersion: 'TLSv1.3'
+                    },
+                    verdicts: { malicious: isMalicious },
+                    certificates: [{ issuer: "Google Trust Services" }],
+                    domain: { registrar: "MarkMonitor Inc." },
+                    files: [
+                        { name: "main.js", hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+                        { name: "style.css", hash: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92" }
+                    ]
+                }
+            };
 
-            // Extract file metadata to display SHA256 details
-            const filesContainer = document.getElementById('fileList');
-            filesContainer.innerHTML = '';
-            
-            // Simulating parsing Cloudflare's file hash responses
-            const fileData = data.result?.files || [{ name: 'index.html', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }];
-            
-            fileData.forEach(file => {
-                filesContainer.innerHTML += `
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                        <div class="font-bold text-slate-700 mb-1">${file.name}</div>
-                        <div class="text-xs font-mono text-slate-500 break-all p-2 bg-slate-200 rounded">${file.sha256}</div>
-                    </div>
-                `;
-            });
+            setTimeout(() => {
+                populateDashboard(rawScanData, url);
+                showDashboard();
+            }, 1500);
         }
 
-        // Feature: JSON Download
+        // Dashboard Populator
+        function populateDashboard(data, targetUrl) {
+            const res = data.result || {};
+            const page = res.page || {};
+            
+            // Header
+            document.getElementById('targetUrl').textContent = page.url || targetUrl;
+            
+            // Verdict
+            const isMalicious = res.verdicts?.malicious === true;
+            const badge = document.getElementById('verdictBadge');
+            const verdictText = document.getElementById('verdictText');
+            const verdictIcon = document.getElementById('verdictIcon');
+            
+            if (isMalicious) {
+                badge.className = 'flex-shrink-0 px-3 py-1 rounded-full text-sm font-bold border flex items-center gap-1 bg-red-50 text-red-700 border-red-200';
+                verdictText.textContent = 'Malicious';
+                verdictIcon.setAttribute('data-lucide', 'shield-alert');
+            } else {
+                badge.className = 'flex-shrink-0 px-3 py-1 rounded-full text-sm font-bold border flex items-center gap-1 bg-emerald-50 text-emerald-700 border-emerald-200';
+                verdictText.textContent = 'Clean / Safe';
+                verdictIcon.setAttribute('data-lucide', 'shield-check');
+            }
+
+            // Key Stats
+            document.getElementById('primaryIp').textContent = page.ip || 'N/A';
+            document.getElementById('primaryAsn').textContent = page.asn || 'N/A';
+            document.getElementById('primaryLoc').textContent = page.asnLocationAlpha2 || 'N/A';
+            document.getElementById('primaryServer').textContent = page.server || 'N/A';
+
+            // Network Details
+            document.getElementById('dtTls').textContent = page.tlsVersion || 'N/A';
+            document.getElementById('dtIssuer').textContent = res.certificates?.[0]?.issuer || 'N/A';
+            document.getElementById('dtRegistrar').textContent = res.domain?.registrar || 'N/A';
+
+            // Files & Hashes
+            const hashList = document.getElementById('hashList');
+            hashList.innerHTML = '';
+            const files = res.files || [];
+            
+            if (files.length === 0) {
+                hashList.innerHTML = '<div class="text-center text-slate-400 py-4 text-sm font-medium">No assets recorded.</div>';
+            } else {
+                files.forEach(f => {
+                    hashList.innerHTML += `
+                        <div class="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                            <div class="font-semibold text-slate-700 text-sm mb-1 truncate">${f.name || 'Unknown Asset'}</div>
+                            <div class="text-xs font-mono text-slate-500 break-all p-2 bg-slate-50 rounded border border-slate-100">${f.hash || f.sha256 || '--'}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Re-render icons injected via JS
+            lucide.createIcons();
+            
+            // Reset screenshot
+            document.getElementById('screenshotImg').classList.add('hidden');
+            document.getElementById('screenshotPlaceholder').classList.remove('hidden');
+            const btn = document.getElementById('liveScreenshotBtn');
+            btn.innerHTML = '<i data-lucide="camera" class="w-4 h-4"></i> Generate Live Screenshot';
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+
+        // Generate Live Screenshot Feature
+        document.getElementById('liveScreenshotBtn').addEventListener('click', async function() {
+            if(!activeTargetUrl) return;
+            
+            const btn = this;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Rendering UI...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/screenshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: activeTargetUrl })
+                });
+
+                if(!res.ok) throw new Error('Render failed');
+                
+                const blob = await res.blob();
+                const objectURL = URL.createObjectURL(blob);
+                
+                const img = document.getElementById('screenshotImg');
+                img.src = objectURL;
+                img.classList.remove('hidden');
+                document.getElementById('screenshotPlaceholder').classList.add('hidden');
+                
+                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Screenshot Captured';
+                btn.classList.replace('bg-indigo-50', 'bg-emerald-50');
+                btn.classList.replace('text-indigo-700', 'text-emerald-700');
+                btn.classList.replace('border-indigo-200', 'border-emerald-200');
+
+            } catch (err) {
+                // Mock the screenshot behavior on failure
+                const img = document.getElementById('screenshotImg');
+                img.src = `https://image.thum.io/get/width/1280/crop/720/${activeTargetUrl}`; // A free external screenshot fallback for demo
+                img.classList.remove('hidden');
+                document.getElementById('screenshotPlaceholder').classList.add('hidden');
+                
+                btn.innerHTML = '<i data-lucide="alert-circle" class="w-4 h-4"></i> Displaying Mock Image';
+            }
+            lucide.createIcons();
+        });
+
+        // JSON Export
         document.getElementById('downloadJsonBtn').addEventListener('click', () => {
             if (!rawScanData) return;
             const blob = new Blob([JSON.stringify(rawScanData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'scan-report.json';
+            a.download = `scan-${new Date().getTime()}.json`;
             a.click();
         });
 
-        // Feature: Save as PDF
+        // PDF Export
         document.getElementById('downloadPdfBtn').addEventListener('click', () => {
-            const element = document.getElementById('exportableArea');
-            html2pdf().set({
-                margin: 0.5,
-                filename: 'URL-Scan-Report.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
-                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-            }).from(element).save();
+            const element = document.getElementById('reportContent');
+            const opt = {
+                margin:       0.4,
+                filename:     `URL-Report-${new Date().getTime()}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            
+            // Generate PDF
+            html2pdf().set(opt).from(element).save();
         });
 
-        // Feature: Capture Live Screenshot
-        document.getElementById('liveScreenshotBtn').addEventListener('click', () => {
-            const area = document.getElementById('screenshotArea');
-            area.innerHTML = `<div class="animate-pulse flex flex-col items-center text-indigo-500">
-                <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <span class="font-medium text-sm">Rendering via Cloudflare Browser...</span>
-            </div>`;
-            
-            // Replaced with actual Fetcher call to the Browser Binding endpoint
-            setTimeout(() => {
-                area.innerHTML = `<div class="w-full h-full bg-slate-800 text-white flex items-center justify-center font-mono text-sm tracking-wider">
-                    [Live Render Image Displayed Here]
-                </div>`;
-            }, 3000);
-        });
+        // UI View Toggles
+        function showLoading() {
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('loadingState').classList.add('flex');
+        }
+
+        function showDashboard() {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('flex');
+            document.getElementById('dashboard').classList.remove('hidden');
+        }
     </script>
 </body>
 </html>
