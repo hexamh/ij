@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare URL Scanner Pro</title>
+    <title>URL Scanner Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        /* Custom scrollbar for inner panes */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #1e40af; font-weight: 600; }
+        .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; font-weight: 500; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans antialiased selection:bg-blue-200">
 
-    <!-- Top Navigation -->
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -27,70 +27,82 @@
                 </div>
                 <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">URL Scanner Pro</span>
             </div>
-            <div class="text-sm font-medium text-slate-500 hidden sm:block">Advanced Threat & Performance Analysis</div>
+            <div class="text-sm font-medium text-slate-500 hidden sm:block">KV-Powered Architecture</div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         
-        <!-- Search Section -->
-        <div class="max-w-3xl mx-auto mb-12 text-center">
-            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Analyze any URL instantly</h1>
-            <p class="text-slate-500 mb-8 text-lg">Deep scan websites for security threats, network properties, and live previews without visiting them.</p>
+        <div class="max-w-3xl mx-auto mb-12">
             
-            <form id="scanForm" class="relative group">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i data-lucide="globe" class="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors"></i>
-                </div>
-                <input type="url" id="urlInput" class="block w-full pl-12 pr-36 py-4 text-lg border-2 border-slate-200 rounded-2xl bg-white shadow-sm focus:ring-0 focus:border-blue-500 transition-all outline-none" placeholder="https://example.com" required>
-                <button type="submit" class="absolute inset-y-2 right-2 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-semibold transition-all shadow-md active:scale-95">
-                    <i data-lucide="scan-line" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Scan Now</span>
+            <div class="flex border-b border-slate-200 mb-8">
+                <button id="tabSubmit" class="flex-1 py-4 text-center transition-colors tab-active flex items-center justify-center gap-2">
+                    <i data-lucide="rocket" class="w-4 h-4"></i> Submit New Target
                 </button>
-            </form>
-            <div id="apiAlert" class="mt-4 hidden text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 text-left flex gap-3 items-start">
-                <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0"></i>
-                <span>API keys not detected or failed. Displaying <strong>mock data</strong> so you can evaluate the UI design. Add keys to <code>wrangler.jsonc</code> for live scans.</span>
+                <button id="tabCheck" class="flex-1 py-4 text-center transition-colors tab-inactive flex items-center justify-center gap-2 hover:text-slate-700 hover:border-slate-300">
+                    <i data-lucide="search" class="w-4 h-4"></i> Check Existing Scan
+                </button>
             </div>
+
+            <div id="viewSubmit" class="text-center animate-in fade-in duration-300">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Initiate Deep Scan</h1>
+                <p class="text-slate-500 mb-8 text-lg">Push a target URL into the queue for security and performance analysis.</p>
+                
+                <form id="submitForm" class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i data-lucide="globe" class="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors"></i>
+                    </div>
+                    <input type="url" id="submitInput" class="block w-full pl-12 pr-36 py-4 text-lg border-2 border-slate-200 rounded-2xl bg-white shadow-sm focus:ring-0 focus:border-blue-500 transition-all outline-none" placeholder="https://example.com" required>
+                    <button type="submit" id="submitBtn" class="absolute inset-y-2 right-2 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-semibold transition-all shadow-md active:scale-95">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Submit Target</span>
+                    </button>
+                </form>
+
+                <div id="submitFeedback" class="mt-6 hidden p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-left flex items-start gap-3">
+                    <i data-lucide="check-circle" class="w-6 h-6 flex-shrink-0 mt-0.5"></i>
+                    <div>
+                        <h4 class="font-bold">Target Submitted Successfully</h4>
+                        <p class="text-sm mt-1">The URL has been queued. Switch to the <strong>Check Existing Scan</strong> tab to view its progress or retrieve the cached report.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="viewCheck" class="text-center hidden animate-in fade-in duration-300">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Retrieve Results</h1>
+                <p class="text-slate-500 mb-8 text-lg">Fetch the latest cached report from the KV datastore for a specific URL.</p>
+                
+                <form id="checkForm" class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i data-lucide="database" class="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors"></i>
+                    </div>
+                    <input type="url" id="checkInput" class="block w-full pl-12 pr-36 py-4 text-lg border-2 border-slate-200 rounded-2xl bg-white shadow-sm focus:ring-0 focus:border-blue-500 transition-all outline-none" placeholder="https://example.com" required>
+                    <button type="submit" id="checkBtn" class="absolute inset-y-2 right-2 flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-2 rounded-xl font-semibold transition-all shadow-md active:scale-95">
+                        <i data-lucide="file-search" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Fetch Report</span>
+                    </button>
+                </form>
+
+                <div id="checkFeedback" class="mt-6 hidden p-4 rounded-xl border text-left flex items-center gap-3">
+                    </div>
+            </div>
+
         </div>
 
-        <!-- Loading State -->
-        <div id="loadingState" class="hidden flex-col items-center justify-center py-20 animate-in fade-in duration-300">
-            <div class="relative">
-                <div class="w-16 h-16 border-4 border-blue-100 rounded-full"></div>
-                <div class="w-16 h-16 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
-                <i data-lucide="search" class="w-6 h-6 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
-            </div>
-            <h3 class="mt-6 text-xl font-semibold text-slate-800">Analyzing Target...</h3>
-            <p class="text-slate-500 mt-2 text-center max-w-sm">Performing deep network inspection, security classification, and rendering environment.</p>
-        </div>
-
-        <!-- Dashboard / Results State -->
         <div id="dashboard" class="hidden animate-in slide-in-from-bottom-4 duration-500">
-            
-            <!-- Export Toolbar (Will be excluded from PDF) -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 pdf-exclude">
                 <div class="text-sm font-medium text-slate-500 flex items-center gap-2">
-                    <i data-lucide="clock" class="w-4 h-4"></i> Scanned just now
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i> Loaded from Datastore
                 </div>
                 <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <button id="downloadPdfBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm">
-                        <i data-lucide="file-down" class="w-4 h-4"></i> Save PDF
-                    </button>
-                    <button id="downloadJsonBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm">
-                        <i data-lucide="code" class="w-4 h-4"></i> Export JSON
-                    </button>
+                    <button id="downloadPdfBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm"><i data-lucide="file-down" class="w-4 h-4"></i> Save PDF</button>
+                    <button id="downloadJsonBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm"><i data-lucide="code" class="w-4 h-4"></i> Export JSON</button>
                 </div>
             </div>
 
-            <!-- Printable Report Area -->
             <div id="reportContent" class="space-y-6">
-                
-                <!-- Main Header Card -->
                 <div class="glass-panel border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="p-6 sm:p-8 flex flex-col lg:flex-row gap-8">
-                        
-                        <!-- Left: Visuals -->
                         <div class="w-full lg:w-5/12 flex flex-col gap-3">
                             <div class="aspect-video bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-200 flex items-center justify-center group">
                                 <img id="screenshotImg" src="" class="w-full h-full object-cover hidden" alt="Website Screenshot">
@@ -103,8 +115,6 @@
                                 <i data-lucide="camera" class="w-4 h-4"></i> Generate Live Screenshot
                             </button>
                         </div>
-
-                        <!-- Right: Core Data -->
                         <div class="w-full lg:w-7/12 flex flex-col justify-center">
                             <div class="flex items-start justify-between gap-4 mb-4">
                                 <h2 id="targetUrl" class="text-2xl sm:text-3xl font-bold text-slate-900 break-all leading-tight">--</h2>
@@ -113,7 +123,6 @@
                                     <span id="verdictText">Pending</span>
                                 </div>
                             </div>
-
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
                                 <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><i data-lucide="server" class="w-3 h-3"></i> IP Address</div>
@@ -136,39 +145,18 @@
                     </div>
                 </div>
 
-                <!-- Detailed Information Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    <!-- Network Details -->
                     <div class="glass-panel border border-slate-200 rounded-2xl p-6 shadow-sm">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
-                            <i data-lucide="globe-2" class="w-5 h-5 text-blue-500"></i> Network & Protocol
-                        </h3>
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="globe-2" class="w-5 h-5 text-blue-500"></i> Network & Protocol</h3>
                         <ul class="space-y-3">
-                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                <span class="text-slate-500 font-medium text-sm">TLS Version</span>
-                                <span id="dtTls" class="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-700">--</span>
-                            </li>
-                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                <span class="text-slate-500 font-medium text-sm">Certificate Issuer</span>
-                                <span id="dtIssuer" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span>
-                            </li>
-                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                <span class="text-slate-500 font-medium text-sm">Domain Registrar</span>
-                                <span id="dtRegistrar" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span>
-                            </li>
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors"><span class="text-slate-500 font-medium text-sm">TLS Version</span><span id="dtTls" class="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-700">--</span></li>
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors"><span class="text-slate-500 font-medium text-sm">Certificate Issuer</span><span id="dtIssuer" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span></li>
+                            <li class="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors"><span class="text-slate-500 font-medium text-sm">Domain Registrar</span><span id="dtRegistrar" class="text-sm font-medium text-slate-800 text-right max-w-[50%] truncate">--</span></li>
                         </ul>
                     </div>
-
-                    <!-- File Hashes / Assets -->
                     <div class="glass-panel border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
-                            <i data-lucide="file-code-2" class="w-5 h-5 text-purple-500"></i> Asset Hashes (SHA-256)
-                        </h3>
-                        <div id="hashList" class="space-y-3 overflow-y-auto max-h-[160px] pr-2">
-                            <!-- Injected via JS -->
-                            <div class="text-center text-slate-400 py-4 text-sm font-medium">No assets recorded.</div>
-                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="file-code-2" class="w-5 h-5 text-purple-500"></i> Asset Hashes (SHA-256)</h3>
+                        <div id="hashList" class="space-y-3 overflow-y-auto max-h-[160px] pr-2"></div>
                     </div>
                 </div>
             </div>
@@ -176,104 +164,124 @@
     </main>
 
     <script>
-        // Initialize Lucide Icons
         lucide.createIcons();
-
-        // Global State
         let rawScanData = null;
         let activeTargetUrl = '';
 
         // DOM Elements
-        const scanForm = document.getElementById('scanForm');
-        const urlInput = document.getElementById('urlInput');
-        const loadingState = document.getElementById('loadingState');
-        const dashboard = document.getElementById('dashboard');
-        const apiAlert = document.getElementById('apiAlert');
-        
-        // Form Submission
-        scanForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const url = urlInput.value.trim();
-            if (!url) return;
-            
-            activeTargetUrl = url;
-            showLoading();
-            apiAlert.classList.add('hidden');
+        const tSubmit = document.getElementById('tabSubmit');
+        const tCheck = document.getElementById('tabCheck');
+        const vSubmit = document.getElementById('viewSubmit');
+        const vCheck = document.getElementById('viewCheck');
+        const dash = document.getElementById('dashboard');
 
+        // Tab Switching Logic
+        tSubmit.addEventListener('click', () => {
+            tSubmit.className = "flex-1 py-4 text-center transition-colors tab-active flex items-center justify-center gap-2";
+            tCheck.className = "flex-1 py-4 text-center transition-colors tab-inactive flex items-center justify-center gap-2 hover:text-slate-700 hover:border-slate-300";
+            vSubmit.classList.remove('hidden');
+            vCheck.classList.add('hidden');
+            dash.classList.add('hidden');
+        });
+
+        tCheck.addEventListener('click', () => {
+            tCheck.className = "flex-1 py-4 text-center transition-colors tab-active flex items-center justify-center gap-2";
+            tSubmit.className = "flex-1 py-4 text-center transition-colors tab-inactive flex items-center justify-center gap-2 hover:text-slate-700 hover:border-slate-300";
+            vCheck.classList.remove('hidden');
+            vSubmit.classList.add('hidden');
+        });
+
+        // 1. Submit Logic
+        document.getElementById('submitForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const url = document.getElementById('submitInput').value.trim();
+            const feedback = document.getElementById('submitFeedback');
+            
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Submitting...';
+            btn.disabled = true;
+            lucide.createIcons();
+            
             try {
-                // 1. Initiate Scan
-                const initRes = await fetch('/api/scan', {
+                const res = await fetch('/api/scan/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
                 });
-
-                if (!initRes.ok) throw new Error('API Keys missing or scan failed');
-
-                const initData = await initRes.json();
-                const scanUuid = initData.result.uuid;
-
-                // 2. Poll for results (Wait 3 seconds minimum, then check)
-                setTimeout(async () => {
-                    try {
-                        const reportRes = await fetch(`/api/scan/${scanUuid}`);
-                        if(!reportRes.ok) throw new Error('Polling failed');
-                        
-                        const reportData = await reportRes.json();
-                        rawScanData = reportData;
-                        populateDashboard(reportData, url);
-                        showDashboard();
-                    } catch (err) {
-                        handleMockFallback(url);
-                    }
-                }, 3000);
-
+                
+                if(!res.ok) throw new Error("Submission Failed");
+                
+                // Pre-fill check input and show success
+                document.getElementById('checkInput').value = url;
+                feedback.classList.remove('hidden');
+                
             } catch (err) {
-                console.warn(err);
-                // Fallback to beautiful mock data so the UI doesn't look broken if API isn't setup
-                handleMockFallback(url);
+                alert("Failed to submit URL. Check API keys.");
+            } finally {
+                btn.innerHTML = '<i data-lucide="upload-cloud" class="w-4 h-4"></i><span class="hidden sm:inline">Submit Target</span>';
+                btn.disabled = false;
+                lucide.createIcons();
             }
         });
 
-        function handleMockFallback(url) {
-            apiAlert.classList.remove('hidden');
+        // 2. Check Logic
+        document.getElementById('checkForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('checkBtn');
+            const url = document.getElementById('checkInput').value.trim();
+            const feedback = document.getElementById('checkFeedback');
             
-            const isMalicious = url.includes('bad') || url.includes('malware');
-            rawScanData = {
-                result: {
-                    page: {
-                        url: url,
-                        ip: '104.21.55.120',
-                        asn: 'AS13335',
-                        asnLocationAlpha2: 'US',
-                        server: 'cloudflare',
-                        tlsVersion: 'TLSv1.3'
-                    },
-                    verdicts: { malicious: isMalicious },
-                    certificates: [{ issuer: "Google Trust Services" }],
-                    domain: { registrar: "MarkMonitor Inc." },
-                    files: [
-                        { name: "main.js", hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
-                        { name: "style.css", hash: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92" }
-                    ]
-                }
-            };
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Checking KV...';
+            btn.disabled = true;
+            feedback.classList.add('hidden');
+            dash.classList.add('hidden');
+            lucide.createIcons();
 
-            setTimeout(() => {
-                populateDashboard(rawScanData, url);
-                showDashboard();
-            }, 1500);
+            try {
+                const res = await fetch(`/api/scan/check?url=${encodeURIComponent(url)}`);
+                const data = await res.json();
+                
+                if (res.status === 404) {
+                    showFeedback('border-red-200 bg-red-50 text-red-800', 'alert-circle', 'Record Not Found', 'No scan exists for this URL. Please submit it first.');
+                } else if (res.status === 202) {
+                    showFeedback('border-amber-200 bg-amber-50 text-amber-800', 'clock', 'Processing', 'The scan is still running. Please check again in 10-15 seconds.');
+                } else if (res.status === 200 && data.data.status === 'completed') {
+                    // Render Dashboard
+                    rawScanData = data.data;
+                    activeTargetUrl = url;
+                    populateDashboard(data.data.result, url);
+                    dash.classList.remove('hidden');
+                } else {
+                    throw new Error("Unknown state");
+                }
+            } catch (err) {
+                showFeedback('border-red-200 bg-red-50 text-red-800', 'x-circle', 'Error', 'Failed to communicate with the datastore.');
+            } finally {
+                btn.innerHTML = '<i data-lucide="file-search" class="w-4 h-4"></i><span class="hidden sm:inline">Fetch Report</span>';
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        });
+
+        function showFeedback(classes, icon, title, desc) {
+            const fb = document.getElementById('checkFeedback');
+            fb.className = `mt-6 p-4 rounded-xl border text-left flex items-start gap-3 ${classes}`;
+            fb.innerHTML = `
+                <i data-lucide="${icon}" class="w-6 h-6 flex-shrink-0 mt-0.5"></i>
+                <div>
+                    <h4 class="font-bold">${title}</h4>
+                    <p class="text-sm mt-1">${desc}</p>
+                </div>
+            `;
+            fb.classList.remove('hidden');
+            lucide.createIcons();
         }
 
-        // Dashboard Populator
-        function populateDashboard(data, targetUrl) {
-            const res = data.result || {};
+        // Dashboard Populator (same as previous)
+        function populateDashboard(res, targetUrl) {
             const page = res.page || {};
-            
-            // Header
             document.getElementById('targetUrl').textContent = page.url || targetUrl;
             
-            // Verdict
             const isMalicious = res.verdicts?.malicious === true;
             const badge = document.getElementById('verdictBadge');
             const verdictText = document.getElementById('verdictText');
@@ -289,18 +297,15 @@
                 verdictIcon.setAttribute('data-lucide', 'shield-check');
             }
 
-            // Key Stats
             document.getElementById('primaryIp').textContent = page.ip || 'N/A';
             document.getElementById('primaryAsn').textContent = page.asn || 'N/A';
             document.getElementById('primaryLoc').textContent = page.asnLocationAlpha2 || 'N/A';
             document.getElementById('primaryServer').textContent = page.server || 'N/A';
 
-            // Network Details
             document.getElementById('dtTls').textContent = page.tlsVersion || 'N/A';
             document.getElementById('dtIssuer').textContent = res.certificates?.[0]?.issuer || 'N/A';
             document.getElementById('dtRegistrar').textContent = res.domain?.registrar || 'N/A';
 
-            // Files & Hashes
             const hashList = document.getElementById('hashList');
             hashList.innerHTML = '';
             const files = res.files || [];
@@ -318,22 +323,18 @@
                 });
             }
 
-            // Re-render icons injected via JS
             lucide.createIcons();
             
-            // Reset screenshot
             document.getElementById('screenshotImg').classList.add('hidden');
             document.getElementById('screenshotPlaceholder').classList.remove('hidden');
             const btn = document.getElementById('liveScreenshotBtn');
             btn.innerHTML = '<i data-lucide="camera" class="w-4 h-4"></i> Generate Live Screenshot';
             btn.disabled = false;
-            lucide.createIcons();
         }
 
-        // Generate Live Screenshot Feature
+        // Live Screenshot Button
         document.getElementById('liveScreenshotBtn').addEventListener('click', async function() {
             if(!activeTargetUrl) return;
-            
             const btn = this;
             btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Rendering UI...';
             btn.disabled = true;
@@ -362,55 +363,37 @@
                 btn.classList.replace('border-indigo-200', 'border-emerald-200');
 
             } catch (err) {
-                // Mock the screenshot behavior on failure
                 const img = document.getElementById('screenshotImg');
-                img.src = `https://image.thum.io/get/width/1280/crop/720/${activeTargetUrl}`; // A free external screenshot fallback for demo
+                img.src = `https://image.thum.io/get/width/1280/crop/720/${activeTargetUrl}`;
                 img.classList.remove('hidden');
                 document.getElementById('screenshotPlaceholder').classList.add('hidden');
-                
                 btn.innerHTML = '<i data-lucide="alert-circle" class="w-4 h-4"></i> Displaying Mock Image';
             }
             lucide.createIcons();
         });
 
-        // JSON Export
+        // Export Functions
         document.getElementById('downloadJsonBtn').addEventListener('click', () => {
             if (!rawScanData) return;
             const blob = new Blob([JSON.stringify(rawScanData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `scan-${new Date().getTime()}.json`;
+            a.download = `kv-scan-${new Date().getTime()}.json`;
             a.click();
         });
 
-        // PDF Export
         document.getElementById('downloadPdfBtn').addEventListener('click', () => {
             const element = document.getElementById('reportContent');
             const opt = {
-                margin:       0.4,
-                filename:     `URL-Report-${new Date().getTime()}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                margin: 0.4,
+                filename: `KV-Report-${new Date().getTime()}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
-            
-            // Generate PDF
             html2pdf().set(opt).from(element).save();
         });
-
-        // UI View Toggles
-        function showLoading() {
-            document.getElementById('dashboard').classList.add('hidden');
-            document.getElementById('loadingState').classList.remove('hidden');
-            document.getElementById('loadingState').classList.add('flex');
-        }
-
-        function showDashboard() {
-            document.getElementById('loadingState').classList.add('hidden');
-            document.getElementById('loadingState').classList.remove('flex');
-            document.getElementById('dashboard').classList.remove('hidden');
-        }
     </script>
 </body>
 </html>
